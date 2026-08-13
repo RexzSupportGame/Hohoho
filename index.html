@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>REXZ Script Panel</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#080b0b;color:#f4f7f5;font-family:Inter,system-ui,sans-serif}
+.wrap{max-width:1100px;margin:auto;padding:24px}.head{display:flex;justify-content:space-between;gap:12px;align-items:end;margin-bottom:20px}
+h1{margin:0;font-size:28px}.muted{color:#89938f}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.card{background:#111615;border:1px solid #23302b;border-radius:18px;padding:18px}
+input,textarea,button{width:100%;border-radius:11px;padding:12px;margin-top:9px;font:inherit}
+input,textarea{background:#0a0e0d;color:#fff;border:1px solid #2a3833}
+button{border:0;background:#00d084;color:#03100a;font-weight:800;cursor:pointer}
+button.red{background:#5f2828;color:#fff}.row{display:flex;gap:10px}.row>*{flex:1}
+pre{background:#080b0b;border:1px solid #202a27;padding:12px;border-radius:12px;overflow:auto}
+table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;padding:9px;border-bottom:1px solid #222b28;font-size:13px}
+@media(max-width:760px){.grid{grid-template-columns:1fr}.head{display:block}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="head">
+  <div><h1>REXZ Script Panel</h1><div class="muted">Key • HWID • expiry • sessions • rate limit</div></div>
+</div>
+
+<div class="grid">
+<section class="card">
+<h3>Admin</h3>
+<input id="pw" type="password" placeholder="ADMIN_PASSWORD">
+</section>
+
+<section class="card">
+<h3>Create Key</h3>
+<div class="row">
+<input id="days" type="number" min="1" value="7" placeholder="Days">
+<input id="maxHwid" type="number" min="1" value="1" placeholder="Max HWID">
+</div>
+<button onclick="createKey()">Generate Key</button>
+<pre id="createOut">-</pre>
+</section>
+
+<section class="card" style="grid-column:1/-1">
+<h3>Script</h3>
+<textarea id="script" rows="13" placeholder="Paste script"></textarea>
+<button onclick="saveScript()">Save Script</button>
+<button style="margin-top:8px" onclick="loadScript()">Load Script</button>
+<pre id="scriptOut">-</pre>
+</section>
+
+<section class="card" style="grid-column:1/-1">
+<h3>Keys</h3>
+<button onclick="listKeys()">Refresh</button>
+<div id="keys"></div>
+</section>
+</div>
+</div>
+
+<script>
+const pw=()=>document.getElementById('pw').value;
+async function req(path,opt={}){
+  const headers=Object.assign({'content-type':'application/json','x-admin-password':pw()},opt.headers||{});
+  const r=await fetch(path,Object.assign({},opt,{headers}));
+  return r.json();
+}
+async function createKey(){
+ const d=await req('/api/key/create',{method:'POST',body:JSON.stringify({
+   days:+document.getElementById('days').value,
+   maxHwid:+document.getElementById('maxHwid').value
+ })});
+ document.getElementById('createOut').textContent=JSON.stringify(d,null,2); listKeys();
+}
+async function saveScript(){
+ const s=document.getElementById('script').value;
+ const d=await req('/api/admin/script',{method:'POST',body:JSON.stringify({script:s})});
+ document.getElementById('scriptOut').textContent=JSON.stringify(d,null,2);
+}
+async function loadScript(){
+ const d=await req('/api/admin/script');
+ document.getElementById('script').value=d.script||'';
+}
+async function listKeys(){
+ const d=await req('/api/key/list');
+ if(!d.ok){document.getElementById('keys').textContent=JSON.stringify(d);return}
+ let h='<table><tr><th>Key</th><th>Expiry</th><th>HWID</th><th>Uses</th><th>State</th><th></th></tr>';
+ for(const k of d.keys){
+   h+=`<tr><td>${k.key}</td><td>${new Date(k.expiresAt).toLocaleString()}</td>
+   <td>${k.hwidCount}/${k.maxHwid}</td><td>${k.uses}</td><td>${k.revoked?'REVOKED':'ACTIVE'}</td>
+   <td>${k.revoked?'':'<button class="red" onclick="revoke(\\''+k.key+'\\')">Revoke</button>'}</td></tr>`;
+ }
+ h+='</table>'; document.getElementById('keys').innerHTML=h;
+}
+async function revoke(key){
+ const d=await req('/api/key/revoke',{method:'POST',body:JSON.stringify({key})});
+ alert(JSON.stringify(d)); listKeys();
+}
+</script>
+</body>
+</html>
